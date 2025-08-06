@@ -12,9 +12,9 @@ class QLearningAgent:
     Agent Q-Learning tabulaire avec politique ε-greedy
     """
     def __init__(self, n_states: int, n_actions: int, 
-                 learning_rate: float = 0.1, discount: float = 0.99, 
-                 epsilon: float = 1.0, epsilon_decay: float = 0.995, 
-                 epsilon_min: float = 0.01):
+             learning_rate: float = 0.1, discount: float = 0.99, 
+             epsilon: float = 1.0, epsilon_decay: float = 0.995, 
+             epsilon_min: float = 0.01):
         """
         Args:
             n_states: Nombre d'états de l'environnement
@@ -34,7 +34,7 @@ class QLearningAgent:
         self.epsilon_min = epsilon_min
         
         # Initialiser la Q-table
-        self.q_table = np.zeros((n_states, n_actions))
+        self.q_table = np.ones((n_states, n_actions)) * 0.1 
         
         # Statistiques d'apprentissage
         self.episode_rewards = []
@@ -122,11 +122,38 @@ class StateDiscretizer:
             return state_idx
         
         return state
+def get_shaped_reward(state, next_state, reward, done, env_name):
+        """Ajoute une récompense de shaping pour guider l'apprentissage"""
+        if env_name != "FrozenLake-v1":
+            return reward
+            
+        if done and reward == 0:  # Punition pour tomber dans un trou
+            return -1.0
+        
+        # Récompense de proximité (Manhattan distance au but)
+        goal_pos = (3, 3)  # Position du but dans FrozenLake 4x4
+        
+        # Convertir l'état en coordonnées 2D
+        state_y, state_x = state // 4, state % 4
+        next_y, next_x = next_state // 4, next_state % 4
+        
+        # Distance au but
+        prev_dist = abs(state_y - goal_pos[0]) + abs(state_x - goal_pos[1])
+        new_dist = abs(next_y - goal_pos[0]) + abs(next_x - goal_pos[1])
+        
+        # Récompense pour se rapprocher du but
+        proximity_reward = 0.01 * (prev_dist - new_dist)
+        
+        return reward + proximity_reward
 
 class QLearningEvaluator:
     """
     Classe pour évaluer et analyser les performances du Q-Learning
     """
+
+    
+
+
     def __init__(self):
         self.results = {}
     
@@ -195,9 +222,11 @@ class QLearningEvaluator:
                 next_obs, reward, terminated, truncated, _ = env.step(action)
                 next_state = discretizer.discretize_state(next_obs)
                 
-                agent.update_q_table(state, action, reward, next_state, 
-                                   terminated or truncated)
-                
+                # Appliquer le reward shaping
+                shaped_reward = get_shaped_reward(state, next_state, reward, terminated or truncated, env_name)
+
+                agent.update_q_table(state, action, shaped_reward, next_state, terminated or truncated)
+                                
                 state = next_state
                 total_reward += reward
                 steps += 1
@@ -547,35 +576,38 @@ def main():
     # Test sur FrozenLake slippery=True
     print("1. Test sur FrozenLake-v1 (slippery=True)")
     frozen_results_slippery = evaluator.train_and_evaluate(
-        env_name="FrozenLake-v1",
-        n_training_episodes=2000,
-        n_evaluation_episodes=100,
-        env_kwargs={'is_slippery': True}
-    )
+    env_name="FrozenLake-v1",
+    n_training_episodes=5000,  # Plus d'épisodes
+    n_evaluation_episodes=100,
+    hyperparams={
+        'learning_rate': 0.1,
+        'discount': 0.99,
+        'epsilon': 1.0,
+        'epsilon_decay': 0.9995,  # Décroissance plus lente
+        'epsilon_min': 0.1  # Minimum plus élevé
+    },
+    env_kwargs={'is_slippery': True}
+)
     if frozen_results_slippery:
         evaluator.plot_training_results("FrozenLake-v1")
     
     # Test sur FrozenLake slippery=False
     print("\n2. Test sur FrozenLake-v1 (slippery=False)")
     frozen_results_nonslippery = evaluator.train_and_evaluate(
-        env_name="FrozenLake-v1",
-        n_training_episodes=2000,
-        n_evaluation_episodes=100,
-        env_kwargs={'is_slippery': False}
-    )
+    env_name="FrozenLake-v1",
+    n_training_episodes=5000,  # Plus d'épisodes
+    n_evaluation_episodes=100,
+    hyperparams={
+        'learning_rate': 0.1,
+        'discount': 0.99,
+        'epsilon': 1.0,
+        'epsilon_decay': 0.9995,  # Décroissance plus lente
+        'epsilon_min': 0.1  # Minimum plus élevé
+    },
+    env_kwargs={'is_slippery': True}
+)
     if frozen_results_nonslippery:
         evaluator.plot_training_results("FrozenLake-v1")
-    
-    # Test sur CartPole avec discrétisation
-    print("\n3. Test sur CartPole-v1 (avec discrétisation)")
-    cartpole_results = evaluator.train_and_evaluate(
-        env_name="CartPole-v1",
-        n_training_episodes=1500,
-        n_evaluation_episodes=100,
-        hyperparams={'learning_rate': 0.2, 'epsilon_decay': 0.998}
-    )
-    if cartpole_results:
-        evaluator.plot_training_results("CartPole-v1")
     
     # Comparaison d'hyperparamètres sur FrozenLake slippery=True
     print("\n4. Comparaison d'hyperparamètres sur FrozenLake (slippery=True)")

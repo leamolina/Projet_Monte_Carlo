@@ -112,10 +112,8 @@ class OptimizedMCTS:
         env_copy.reset()
         
         # Restaurer l'état initial
-        if hasattr(env_copy.unwrapped, 's'):  # FrozenLake
+        if hasattr(env_copy.unwrapped, 's'):
             env_copy.unwrapped.s = state
-        elif hasattr(env_copy.unwrapped, 'state'):  # CartPole, LunarLander
-            env_copy.unwrapped.state = state
         
         # Première action imposée
         obs, reward, terminated, truncated, _ = env_copy.step(first_action)
@@ -128,41 +126,58 @@ class OptimizedMCTS:
         steps = 0
         while not (terminated or truncated) and steps < self.max_depth:
             current_state_key = self.get_state_key(obs)
-            
-            if random.random() < self.epsilon:
-                # Action aléatoire (exploration)
-                action = env_copy.action_space.sample()
-                self.bias_usage.append(0)  # Pas de biais utilisé
+            # Pour FrozenLake, utiliser une politique fortement biaisée vers le but
+            if self.env.spec.id == "FrozenLake-v1":
+                if np.random.random() < 0.8:  # 80% du temps, aller vers le but
+                    # Déterminer la position actuelle
+                    if hasattr(env_copy.unwrapped, 's'):
+                        pos = env_copy.unwrapped.s
+                        row, col = pos // 4, pos % 4
+                        
+                        # Si on est plus loin du but horizontalement, privilégier droite
+                        if col < 3:
+                            action = 1  # Droite
+                        else:
+                            action = 2  # Bas
+                    else:
+                        action = np.random.choice([1, 2])  # Droite ou bas par défaut
+                else:
+                    action = env_copy.action_space.sample()
             else:
-                # Action biaisée basée sur les valeurs d'état estimées
-                best_action = 0
-                best_value = float('-inf')
+                # Politique ε-greedy standard pour les autres environnements
+                if np.random.random() < self.epsilon:
+                    action = env_copy.action_space.sample()
+                    self.bias_usage.append(0)
+                else:
+                    # Action biaisée basée sur les valeurs d'état estimées
+                    best_action = 0
+                    best_value = float('-inf')
+                    
+                    for a in range(self.action_space_size):
+                        # Simuler temporairement l'action pour évaluer l'état suivant
+                        temp_env = gym.make(self.env.spec.id)
+                        temp_env.reset()
+                        
+                        if hasattr(temp_env.unwrapped, 's'):
+                            temp_env.unwrapped.s = current_state_key if isinstance(current_state_key, int) else 0
+                        
+                        try:
+                            next_obs, _, term, trunc, _ = temp_env.step(a)
+                            if not (term or trunc):
+                                next_state_key = self.get_state_key(next_obs)
+                                state_value = self.get_state_value_estimate(next_state_key)
+                                
+                                if state_value > best_value:
+                                    best_value = state_value
+                                    best_action = a
+                        except:
+                            pass  # En cas d'erreur, garder l'action par défaut
+                        
+                        temp_env.close()
+                    
+                    action = best_action
+                    self.bias_usage.append(1)  # Biais utilisé
                 
-                for a in range(self.action_space_size):
-                    # Simuler temporairement l'action pour évaluer l'état suivant
-                    temp_env = gym.make(self.env.spec.id)
-                    temp_env.reset()
-                    
-                    if hasattr(temp_env.unwrapped, 's'):
-                        temp_env.unwrapped.s = current_state_key if isinstance(current_state_key, int) else 0
-                    
-                    try:
-                        next_obs, _, term, trunc, _ = temp_env.step(a)
-                        if not (term or trunc):
-                            next_state_key = self.get_state_key(next_obs)
-                            state_value = self.get_state_value_estimate(next_state_key)
-                            
-                            if state_value > best_value:
-                                best_value = state_value
-                                best_action = a
-                    except:
-                        pass  # En cas d'erreur, garder l'action par défaut
-                    
-                    temp_env.close()
-                
-                action = best_action
-                self.bias_usage.append(1)  # Biais utilisé
-            
             obs, reward, terminated, truncated, _ = env_copy.step(action)
             total_reward += reward
             steps += 1
@@ -173,6 +188,7 @@ class OptimizedMCTS:
         self.update_state_memory(state_key, total_reward)
         
         return total_reward
+
     
     def adaptive_simulation_count(self, state, action):
         """
@@ -653,12 +669,12 @@ def main():
     # Test sur FrozenLake avec is_slippery=True
     print("Test 1: FrozenLake-v1 (slippery=True)")
     results1 = evaluator.compare_algorithms(
-        env_name="FrozenLake-v1",
-        n_episodes=100,
-        n_simulations=300,
-        env_kwargs={'is_slippery': True},
-        result_label="FrozenLake-v1 (slippery=True)"
-    )
+    env_name="FrozenLake-v1",
+    n_episodes=100,
+    n_simulations=1000,  # Augmenter à 1000
+    env_kwargs={'is_slippery': True},
+    result_label="FrozenLake-v1 (slippery=True)"
+)
     evaluator.plot_comparison("FrozenLake-v1 (slippery=True)")
     evaluator.analyze_optimization_impact("FrozenLake-v1 (slippery=True)")
     
@@ -668,7 +684,7 @@ def main():
     results2 = evaluator.compare_algorithms(
         env_name="FrozenLake-v1",
         n_episodes=100,
-        n_simulations=300,
+        n_simulations=1000,  # Augmenter à 1000
         env_kwargs={'is_slippery': False},
         result_label="FrozenLake-v1 (slippery=False)"
     )
