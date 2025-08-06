@@ -4,7 +4,7 @@ import math
 from collections import defaultdict
 import os
 import matplotlib.pyplot as plt
-
+import time
 
 class MCTSNode:
     def __init__(self, state, parent=None):
