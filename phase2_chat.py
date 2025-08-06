@@ -1,10 +1,9 @@
 import gymnasium as gym
 import numpy as np
 import math
-from collections import defaultdict
+import time
 import os
 import matplotlib.pyplot as plt
-import time
 
 class MCTSNode:
     def __init__(self, state, parent=None):
@@ -17,7 +16,7 @@ class MCTSNode:
     def is_fully_expanded(self, action_space_size):
         return len(self.children) == action_space_size
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param=1.0):  # Ajusté c_param à 1.0 pour test
         choices_weights = []
         for action, child in self.children.items():
             exploitation = child.value / child.visits
@@ -26,7 +25,7 @@ class MCTSNode:
         return max(choices_weights, key=lambda x: x[0])[1:]
 
 class MCTS:
-    def __init__(self, env, n_simulations=300, max_depth=100, c_param=1.4):
+    def __init__(self, env, n_simulations=1000, max_depth=200, c_param=1.0):
         self.env = env
         self.n_simulations = n_simulations
         self.max_depth = max_depth
@@ -127,12 +126,12 @@ class MCTS:
                 best_action = action
 
         return best_action
-    
+
 class MCTSEvaluator:
     def __init__(self):
         self.results = {}
 
-    def evaluate_environment(self, env_name="CliffWalking-v0", n_episodes=20, n_simulations=500, max_depth=100):
+    def evaluate(self, env_name="CliffWalking-v1", n_episodes=20, n_simulations=1000, max_depth=200):
         env = gym.make(env_name)
         mcts = MCTS(env, n_simulations=n_simulations, max_depth=max_depth)
         scores = []
@@ -146,7 +145,7 @@ class MCTSEvaluator:
             steps = 0
             done = False
 
-            while not done and steps < 100:
+            while not done and steps < 200:  # Limite augmentée
                 if hasattr(env.unwrapped, 's'):
                     current_state = env.unwrapped.s
                 else:
@@ -154,8 +153,8 @@ class MCTSEvaluator:
 
                 start_time = time.time()
                 action = mcts.best_action(current_state)
-                computation_time = time.time() - start_time
-                computation_times.append(computation_time)
+                elapsed = time.time() - start_time
+                computation_times.append(elapsed)
 
                 state, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
@@ -201,7 +200,7 @@ class MCTSEvaluator:
 
         os.makedirs('Plots', exist_ok=True)
         fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        fig.suptitle('MCTS - Résultats', fontsize=16)
+        fig.suptitle('MCTS amélioré - Résultats', fontsize=16)
 
         # Scores par épisode
         ax1 = axes[0, 0]
@@ -243,7 +242,7 @@ class MCTSEvaluator:
         ax3.legend()
         ax3.grid(True, alpha=0.3)
 
-        # Temps de calcul par épisode
+        # Temps de calcul par action
         ax4 = axes[1, 1]
         computation_times = [res['avg_computation_time'] for res in self.results.values()]
         bars = ax4.bar(list(self.results.keys()), computation_times, alpha=0.7, color='green')
@@ -255,16 +254,18 @@ class MCTSEvaluator:
                      f'{value:.3f}s', ha='center', va='bottom', fontsize=9)
 
         plt.tight_layout()
-        plt.savefig('Plots/Chat/mcts_results(phase2).png', dpi=300)
+        plt.savefig('Plots/Chat/mcts_improved_results(phase2).png', dpi=300)
+        plt.show()
 
-
-
-if __name__ == "__main__":
+def main():
     evaluator = MCTSEvaluator()
-    evaluator.evaluate_environment(
+    evaluator.evaluate(
         env_name="CliffWalking-v1",
-        n_episodes=50,
+        n_episodes=20,
         n_simulations=1000,
-        max_depth=100
+        max_depth=200
     )
     evaluator.plot_results()
+
+if __name__ == "__main__":
+    main()

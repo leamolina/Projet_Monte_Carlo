@@ -2,9 +2,9 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from collections import defaultdict
 import math
 import os
+from collections import defaultdict
 
 class MCTSNode:
     def __init__(self, state, parent=None):
@@ -17,7 +17,7 @@ class MCTSNode:
     def is_fully_expanded(self, action_space_size):
         return len(self.children) == action_space_size
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param=1.0):  # Ajusté c_param pour test
         choices_weights = []
         for action, child in self.children.items():
             exploitation = child.value / child.visits
@@ -26,7 +26,7 @@ class MCTSNode:
         return max(choices_weights, key=lambda x: x[0])[1:]
 
 class MCTS:
-    def __init__(self, env, n_simulations=300, max_depth=100, c_param=1.4):
+    def __init__(self, env, n_simulations=1000, max_depth=200, c_param=1.0):
         self.env = env
         self.n_simulations = n_simulations
         self.max_depth = max_depth
@@ -51,7 +51,6 @@ class MCTS:
         while not (terminated or truncated) and steps < max_depth:
             state = env.unwrapped.s if hasattr(env.unwrapped, 's') else None
             if state is not None:
-                # Politique biaisée simple pour CliffWalking
                 height, width = 4, 12
                 y, x = state // width, state % width
                 if np.random.random() < 0.7:
@@ -73,31 +72,25 @@ class MCTS:
         return total_reward
 
     def tree_policy(self, node):
-        # Sélectionner un noeud feuille à développer
         while True:
             if node.visits == 0 or node.parent is None:
                 return node
             if not node.is_fully_expanded(self.action_space_size):
                 return node
-            # Sinon, choisir le meilleur enfant selon UCT
             _, action, node = node.best_child(self.c_param)
         return node
 
     def expand(self, node):
-        # Étendre un enfant non exploré
         tried_actions = node.children.keys()
         for action in range(self.action_space_size):
             if action not in tried_actions:
-                # Créer un nouvel enfant
                 new_state = self.simulate_action(node.state, action)
                 child_node = MCTSNode(new_state, parent=node)
                 node.children[action] = child_node
                 return child_node
-        # Tous les enfants sont déjà explorés
         return None
 
     def simulate_action(self, state, action):
-        # Simuler l'action sur un environnement cloné pour obtenir le nouvel état
         env_copy = self.clone_env(self.env_for_sim)
         if hasattr(env_copy.unwrapped, 's'):
             env_copy.unwrapped.s = state
@@ -107,7 +100,6 @@ class MCTS:
         return new_state
 
     def backpropagate(self, node, reward):
-        # Remonter la récompense dans l'arbre
         while node is not None:
             node.visits += 1
             node.value += reward
@@ -119,7 +111,6 @@ class MCTS:
             node = self.tree_policy(self.root)
             if node.visits > 0 and not node.is_fully_expanded(self.action_space_size):
                 node = self.expand(node)
-            # Simuler un playout à partir de l'état du noeud
             env_sim = self.clone_env(self.env_for_sim)
             if hasattr(env_sim.unwrapped, 's'):
                 env_sim.unwrapped.s = node.state
@@ -127,7 +118,6 @@ class MCTS:
             env_sim.close()
             self.backpropagate(node, reward)
 
-        # Choisir l'action avec la meilleure moyenne
         best_action = None
         best_value = -float('inf')
         for action, child in self.root.children.items():
@@ -137,11 +127,12 @@ class MCTS:
                 best_action = action
 
         return best_action
+
 class MCTSEvaluator:
     def __init__(self):
         self.results = {}
 
-    def evaluate(self, env_name="CliffWalking-v0", n_episodes=20, n_simulations=500, max_depth=100):
+    def evaluate(self, env_name="CliffWalking-v1", n_episodes=20, n_simulations=1000, max_depth=200):
         env = gym.make(env_name)
         mcts = MCTS(env, n_simulations=n_simulations, max_depth=max_depth)
         scores = []
@@ -155,7 +146,7 @@ class MCTSEvaluator:
             steps = 0
             done = False
 
-            while not done and steps < 100:
+            while not done and steps < 200:  # Limite augmentée
                 if hasattr(env.unwrapped, 's'):
                     current_state = env.unwrapped.s
                 else:
@@ -267,14 +258,13 @@ class MCTSEvaluator:
         plt.savefig('Plots/Chat/mcts_optimized_results(phase3).png', dpi=300)
         plt.show()
 
-
 def main():
     evaluator = MCTSEvaluator()
     evaluator.evaluate(
         env_name="CliffWalking-v1",
-        n_episodes=50,
+        n_episodes=20,
         n_simulations=1000,
-        max_depth=100
+        max_depth=200
     )
     evaluator.plot_results()
 
