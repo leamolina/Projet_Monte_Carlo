@@ -108,9 +108,9 @@ class MCTSEvaluator:
         self.results = defaultdict(list)
         
     def visualize_cliff_walking_policy(self, agent):
-        env = gym.make("CliffWalking-v0")
+        env = gym.make("CliffWalking-v1")
         
-        print("\nPolitique apprise pour CliffWalking-v0:")
+        print("\nPolitique apprise pour CliffWalking-v1:")
         action_symbols = ['↑', '↓', '→', '←']
         height, width = 4, 12
         
@@ -182,7 +182,7 @@ class MCTSEvaluator:
                 total_reward += reward
                 steps += 1
                 
-                if steps >= 50 or terminated or truncated:
+                if steps >= 100 or terminated or truncated:
                     break
             
             scores.append(total_reward)
@@ -193,8 +193,8 @@ class MCTSEvaluator:
             if terminated and steps < 30:
                 success_count += 1
             
-            if (episode + 1) % 5 == 0:
-                print(f"Épisode {episode + 1}/{n_episodes} - Score moyen: {np.mean(scores[-5:]):.2f}")
+            
+            print(f"Épisode {episode + 1} : Reward =  {total_reward}, Steps = {steps}")
         
         self.visualize_cliff_walking_policy(mcts)
         
@@ -301,8 +301,8 @@ def main():
     
     try:
         results = evaluator.evaluate_environment(
-            env_name="CliffWalking-v0",
-            n_episodes=20,
+            env_name="CliffWalking-v1",
+            n_episodes=50,
             n_simulations=1000,
             render=False
         )

@@ -262,9 +262,9 @@ class MCTSEvaluator:
 if __name__ == "__main__":
     evaluator = MCTSEvaluator()
     evaluator.evaluate_environment(
-        env_name="CliffWalking-v0",
-        n_episodes=20,
-        n_simulations=500,
+        env_name="CliffWalking-v1",
+        n_episodes=50,
+        n_simulations=1000,
         max_depth=100
     )
     evaluator.plot_results()
